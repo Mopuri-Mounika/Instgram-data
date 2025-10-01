@@ -175,14 +175,16 @@ for url in urls_sorted:
         st.write(caption_row["Captions"])
         st.write(f"📅 {caption_row['Date'].date()} 🕒 {caption_row['Time']} ❤️ Likes: {format_indian_number(caption_row.get('Likes', 0))}")
 
-    # Display comments with sentiment
+    # ✅ Display comments with reduced spacing
     if not comments_only.empty:
         st.subheader("Comments")
+        comments_md = ""
         for _, row in comments_only.iterrows():
             comment_text = row["Comments"]
             sentiment_label = row.get("Sentiment_Label", "")
             sentiment_score = row.get("Sentiment_Score", "")
-            st.write(f"- 💬 {comment_text} ({sentiment_label}: {sentiment_score})")
+            comments_md += f"💬 {comment_text} ({sentiment_label}: {sentiment_score})<br>"
+        st.markdown(comments_md, unsafe_allow_html=True)
 
     # --- Use sentiment values from table ---
     sentiment_row = summary_df[summary_df["URL"] == url].iloc[0]
