@@ -188,6 +188,9 @@ st.markdown("---")
 # ===============================
 # Drill-down Explorer (Multiple URLs)
 # ===============================
+# ===============================
+# Drill-down Explorer (Multiple URLs + Optional Sentiment Split)
+# ===============================
 st.markdown("## 📌 Explore Posts")
 
 if not summary_df.empty:
@@ -196,7 +199,7 @@ if not summary_df.empty:
         summary_df["URL"].tolist()
     )
 
-    if st.button("Show Results") and selected_post_urls:
+    if selected_post_urls:
         multi_posts = filtered[filtered["URL"].isin(selected_post_urls)]
 
         # --- Show captions & meta info for each post ---
@@ -211,29 +214,37 @@ if not summary_df.empty:
                     f"📅 {row['Date'].date()} 🕒 {row['Time']} ❤️ Likes: {format_indian_number(row['Likes'])}  \n"
                     f"🔗 [View Post]({url})"
                 )
+
+                # Optional button to show sentiment split for this post
+                show_sentiment = st.checkbox(f"Show Sentiment Split for this post?", key=f"sentiment_{url}")
+                if show_sentiment:
+                    comments_only = post_group[post_group["Comments"].notna()].copy()
+                    comments_only["Sentiment_Label"] = comments_only["Sentiment_Label"].astype(str).str.strip().str.title()
+
+                    # Sentiment Filter Dropdown per post
+                    sentiment_filter = st.selectbox(
+                        "Filter comments by Sentiment", 
+                        ["All", "Positive", "Negative", "Neutral"],
+                        key=f"filter_{url}"
+                    )
+                    if sentiment_filter != "All":
+                        comments_only = comments_only[comments_only["Sentiment_Label"] == sentiment_filter]
+
+                    if not comments_only.empty:
+                        st.dataframe(
+                            comments_only[["Comments", "Sentiment_Label", "Sentiment_Score"]].reset_index(drop=True),
+                            use_container_width=True
+                        )
+
+                        # Sentiment Summary
+                        sentiment_counts_post = comments_only["Sentiment_Label"].value_counts(normalize=True) * 100
+                        st.markdown(
+                            f"**Sentiment Summary:**  \n"
+                            f"🙂 Positive: {sentiment_counts_post.get('Positive', 0):.1f}% | "
+                            f"😡 Negative: {sentiment_counts_post.get('Negative', 0):.1f}% | "
+                            f"😐 Neutral: {sentiment_counts_post.get('Neutral', 0):.1f}%"
+                        )
+                    else:
+                        st.info("No comments available for the selected filter.")
+
                 st.markdown("---")
-
-        # --- Comments & Sentiment Filter ---
-        st.subheader("💬 Comments Explorer")
-        sentiment_filter = st.selectbox("Filter by Sentiment", ["All", "Positive", "Negative", "Neutral"])
-
-        comments_only = multi_posts[multi_posts["Comments"].notna()].copy()
-        comments_only["Sentiment_Label"] = comments_only["Sentiment_Label"].astype(str).str.strip().str.title()
-
-        if sentiment_filter != "All":
-            comments_only = comments_only[comments_only["Sentiment_Label"] == sentiment_filter]
-
-        if not comments_only.empty:
-            comment_table = comments_only[["URL", "Comments", "Sentiment_Label", "Sentiment_Score"]].reset_index(drop=True)
-            st.dataframe(comment_table, use_container_width=True)
-
-            # --- Sentiment Summary ---
-            sentiment_counts_post = comments_only["Sentiment_Label"].value_counts(normalize=True) * 100
-            st.markdown(
-                f"**Sentiment Summary:**  \n"
-                f"🙂 Positive: {sentiment_counts_post.get('Positive', 0):.1f}% | "
-                f"😡 Negative: {sentiment_counts_post.get('Negative', 0):.1f}% | "
-                f"😐 Neutral: {sentiment_counts_post.get('Neutral', 0):.1f}%"
-            )
-        else:
-            st.info("No comments available for the selected filters.")
