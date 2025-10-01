@@ -5,7 +5,7 @@ import pandas as pd
 try:
     df = pd.read_csv("sentiments.csv", parse_dates=["Date"])
 except FileNotFoundError:
-    st.error("CSV file not found! Make sure 'data/sentiments.csv' exists.")
+    st.error("CSV file not found! Make sure 'sentiments.csv' exists.")
     st.stop()
 except pd.errors.EmptyDataError:
     st.error("CSV file is empty! Please provide a valid CSV with data.")
@@ -156,42 +156,52 @@ st.markdown("## Posts Summary")
 st.dataframe(summary_df, use_container_width=True)
 st.markdown("---")
 
-# --- Display posts section-wise by URL, sorted by Likes ---
-urls_sorted = summary_df.sort_values(
-    by="Likes", key=lambda x: x.str.replace(",", "").astype(int), ascending=False
-)["URL"]
+# --- New Drill-Down Section ---
+st.markdown("## 📌 Explore Posts")
 
-for url in urls_sorted:
-    post_group = filtered[filtered["URL"] == url]
+# Show summary table first
+st.dataframe(summary_df, use_container_width=True)
+
+# Select Post (URL)
+selected_post_url = st.selectbox("🔗 Select a Post (URL)", summary_df["URL"].tolist())
+
+if selected_post_url:
+    post_group = filtered[filtered["URL"] == selected_post_url]
     comments_only = post_group[post_group["Comments"].notna()]
 
-    st.markdown(f"### 📌 [View Post]({url})")
-   
-    # Display caption
+    # Caption & Meta
     caption_row = post_group[post_group["Captions"].notna()]
     if not caption_row.empty:
         caption_row = caption_row.iloc[0]
-        st.subheader("Caption")
-        st.write(caption_row["Captions"])
+        st.subheader("📝 Post Details")
+        st.write(f"**Caption:** {caption_row['Captions']}")
         st.write(f"📅 {caption_row['Date'].date()} 🕒 {caption_row['Time']} ❤️ Likes: {format_indian_number(caption_row.get('Likes', 0))}")
+        st.markdown(f"🔗 [View Post on Instagram]({selected_post_url})")
 
-    # ✅ Display comments with reduced spacing
+    # Custom Timeline (Likes vs Date)
+    st.subheader("📊 Post Timeline")
+    post_dates = post_group["Date"].dropna().sort_values()
+    if not post_dates.empty:
+        st.line_chart(post_group.groupby("Date")["Likes"].max())
+
+    # Sentiment Filter Dropdown
+    st.subheader("💬 Comments Explorer")
+    sentiment_filter = st.selectbox("Filter by Sentiment", ["All", "Positive", "Negative", "Neutral"])
+
     if not comments_only.empty:
-        st.subheader("Comments")
-        comments_md = ""
-        for _, row in comments_only.iterrows():
-            comment_text = row["Comments"]
-            sentiment_label = row.get("Sentiment_Label", "")
-            sentiment_score = row.get("Sentiment_Score", "")
-            comments_md += f"💬 {comment_text} ({sentiment_label}: {sentiment_score})<br>"
-        st.markdown(comments_md, unsafe_allow_html=True)
+        # Apply sentiment filter
+        comments_only["Sentiment_Label"] = comments_only["Sentiment_Label"].astype(str).str.strip().str.title()
+        if sentiment_filter != "All":
+            comments_only = comments_only[comments_only["Sentiment_Label"] == sentiment_filter]
 
-    # --- Use sentiment values from table ---
-    sentiment_row = summary_df[summary_df["URL"] == url].iloc[0]
-    st.write(
-        f"Sentiment Summary: 🙂 Positive: {sentiment_row['Positive (%)']} | "
-        f"😡 Negative: {sentiment_row['Negative (%)']} | "
-        f"😐 Neutral: {sentiment_row['Neutral (%)']}"
-    )
+        # Display comments in table format
+        comment_table = comments_only[["Comments", "Sentiment_Label", "Sentiment_Score"]].reset_index(drop=True)
+        st.dataframe(comment_table, use_container_width=True)
 
-    st.markdown("---")
+        # Sentiment Summary
+        sentiment_counts_post = comments_only["Sentiment_Label"].value_counts(normalize=True) * 100
+        st.markdown(
+            f"**Sentiment Summary:** 🙂 Positive: {sentiment_counts_post.get('Positive', 0):.1f}% | "
+            f"😡 Negative: {sentiment_counts_post.get('Negative', 0):.1f}% | "
+            f"😐 Neutral: {sentiment_counts_post.get('Neutral', 0):.1f}%"
+        )
