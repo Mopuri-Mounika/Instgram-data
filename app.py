@@ -191,60 +191,79 @@ st.markdown("---")
 # ===============================
 # Drill-down Explorer (Multiple URLs + Optional Sentiment Split)
 # ===============================
+# ===============================
+# Drill-down Explorer (Timeline + Multi-Post + Optional Sentiment Split)
+# ===============================
 st.markdown("## 📌 Explore Posts")
 
-if not summary_df.empty:
-    selected_post_urls = st.multiselect(
-        "🔗 Select one or more Posts (URLs)",
-        summary_df["URL"].tolist()
-    )
+if not filtered.empty:
+    # --- Timeline filter for posts ---
+    min_post_date, max_post_date = filtered["Date"].min().date(), filtered["Date"].max().date()
+    col1, col2 = st.columns(2)
+    with col1:
+        timeline_from = st.date_input("Timeline From", value=min_post_date, min_value=min_post_date, max_value=max_post_date)
+    with col2:
+        timeline_to = st.date_input("Timeline To", value=max_post_date, min_value=min_post_date, max_value=max_post_date)
 
-    if selected_post_urls:
-        multi_posts = filtered[filtered["URL"].isin(selected_post_urls)]
+    # Filter posts by selected timeline
+    posts_in_timeline = filtered[
+        (filtered["Date"].dt.date >= timeline_from) & (filtered["Date"].dt.date <= timeline_to)
+    ]
 
-        # --- Show captions & meta info for each post ---
-        st.subheader("📝 Selected Posts Details")
-        for url in selected_post_urls:
-            post_group = multi_posts[multi_posts["URL"] == url]
-            caption_row = post_group[post_group["Captions"].notna()]
-            if not caption_row.empty:
-                row = caption_row.iloc[0]
-                st.markdown(
-                    f"**Caption:** {row['Captions']}  \n"
-                    f"📅 {row['Date'].date()} 🕒 {row['Time']} ❤️ Likes: {format_indian_number(row['Likes'])}  \n"
-                    f"🔗 [View Post]({url})"
-                )
+    if not posts_in_timeline.empty:
+        selected_post_urls = st.multiselect(
+            "🔗 Select one or more Posts (URLs)",
+            posts_in_timeline["URL"].drop_duplicates().tolist()
+        )
 
-                # Optional button to show sentiment split for this post
-                show_sentiment = st.checkbox(f"Show Sentiment Split for this post?", key=f"sentiment_{url}")
-                if show_sentiment:
-                    comments_only = post_group[post_group["Comments"].notna()].copy()
-                    comments_only["Sentiment_Label"] = comments_only["Sentiment_Label"].astype(str).str.strip().str.title()
+        if selected_post_urls:
+            multi_posts = posts_in_timeline[posts_in_timeline["URL"].isin(selected_post_urls)]
 
-                    # Sentiment Filter Dropdown per post
-                    sentiment_filter = st.selectbox(
-                        "Filter comments by Sentiment", 
-                        ["All", "Positive", "Negative", "Neutral"],
-                        key=f"filter_{url}"
+            # --- Show captions & meta info for each post ---
+            st.subheader("📝 Selected Posts Details")
+            for url in selected_post_urls:
+                post_group = multi_posts[multi_posts["URL"] == url]
+                caption_row = post_group[post_group["Captions"].notna()]
+                comments_only = post_group[post_group["Comments"].notna()]
+
+                if not caption_row.empty:
+                    row = caption_row.iloc[0]
+                    total_comments = comments_only.shape[0]
+
+                    st.markdown(
+                        f"**Caption:** {row['Captions']}  \n"
+                        f"📅 {row['Date'].date()} 🕒 {row['Time']} ❤️ Likes: {format_indian_number(row['Likes'])} 💬 Total Comments: {format_indian_number(total_comments)}  \n"
+                        f"🔗 [View Post]({url})"
                     )
-                    if sentiment_filter != "All":
-                        comments_only = comments_only[comments_only["Sentiment_Label"] == sentiment_filter]
 
-                    if not comments_only.empty:
-                        st.dataframe(
-                            comments_only[["Comments", "Sentiment_Label", "Sentiment_Score"]].reset_index(drop=True),
-                            use_container_width=True
+                    # Optional button to show sentiment split
+                    show_sentiment = st.checkbox(f"Show Sentiment Split for this post?", key=f"sentiment_{url}")
+                    if show_sentiment:
+                        comments_only["Sentiment_Label"] = comments_only["Sentiment_Label"].astype(str).str.strip().str.title()
+                        sentiment_filter = st.selectbox(
+                            "Filter comments by Sentiment",
+                            ["All", "Positive", "Negative", "Neutral"],
+                            key=f"filter_{url}"
                         )
+                        if sentiment_filter != "All":
+                            comments_only = comments_only[comments_only["Sentiment_Label"] == sentiment_filter]
 
-                        # Sentiment Summary
-                        sentiment_counts_post = comments_only["Sentiment_Label"].value_counts(normalize=True) * 100
-                        st.markdown(
-                            f"**Sentiment Summary:**  \n"
-                            f"🙂 Positive: {sentiment_counts_post.get('Positive', 0):.1f}% | "
-                            f"😡 Negative: {sentiment_counts_post.get('Negative', 0):.1f}% | "
-                            f"😐 Neutral: {sentiment_counts_post.get('Neutral', 0):.1f}%"
-                        )
-                    else:
-                        st.info("No comments available for the selected filter.")
+                        if not comments_only.empty:
+                            st.dataframe(
+                                comments_only[["Comments", "Sentiment_Label", "Sentiment_Score"]].reset_index(drop=True),
+                                use_container_width=True
+                            )
 
-                st.markdown("---")
+                            sentiment_counts_post = comments_only["Sentiment_Label"].value_counts(normalize=True) * 100
+                            st.markdown(
+                                f"**Sentiment Summary:**  \n"
+                                f"🙂 Positive: {sentiment_counts_post.get('Positive', 0):.1f}% | "
+                                f"😡 Negative: {sentiment_counts_post.get('Negative', 0):.1f}% | "
+                                f"😐 Neutral: {sentiment_counts_post.get('Neutral', 0):.1f}%"
+                            )
+                        else:
+                            st.info("No comments available for the selected filter.")
+
+                    st.markdown("---")
+    else:
+        st.info("No posts available for the selected timeline.")
