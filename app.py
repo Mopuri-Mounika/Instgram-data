@@ -185,40 +185,55 @@ st.markdown("---")
 # ===============================
 # Drill-down Explorer
 # ===============================
+# ===============================
+# Drill-down Explorer (Multiple URLs)
+# ===============================
 st.markdown("## 📌 Explore Posts")
 
 if not summary_df.empty:
-    selected_post_url = st.selectbox("🔗 Select a Post (URL)", summary_df["URL"].tolist())
+    selected_post_urls = st.multiselect(
+        "🔗 Select one or more Posts (URLs)",
+        summary_df["URL"].tolist()
+    )
 
-    if selected_post_url:
-        post_group = filtered[filtered["URL"] == selected_post_url]
-        comments_only = post_group[post_group["Comments"].notna()]
+    if st.button("Show Results") and selected_post_urls:
+        multi_posts = filtered[filtered["URL"].isin(selected_post_urls)]
 
-        # Caption & Meta
-        caption_row = post_group[post_group["Captions"].notna()]
-        if not caption_row.empty:
-            caption_row = caption_row.iloc[0]
-            st.subheader("📝 Post Details")
-            st.write(f"**Caption:** {caption_row['Captions']}")
-            st.write(f"📅 {caption_row['Date'].date()} 🕒 {caption_row['Time']} ❤️ Likes: {format_indian_number(caption_row.get('Likes', 0))}")
-            st.markdown(f"🔗 [View Post on Instagram]({selected_post_url})")
+        # --- Show captions & meta info for each post ---
+        st.subheader("📝 Selected Posts Details")
+        for url in selected_post_urls:
+            post_group = multi_posts[multi_posts["URL"] == url]
+            caption_row = post_group[post_group["Captions"].notna()]
+            if not caption_row.empty:
+                row = caption_row.iloc[0]
+                st.markdown(
+                    f"**Caption:** {row['Captions']}  \n"
+                    f"📅 {row['Date'].date()} 🕒 {row['Time']} ❤️ Likes: {format_indian_number(row['Likes'])}  \n"
+                    f"🔗 [View Post]({url})"
+                )
+                st.markdown("---")
 
-        # Sentiment Filter Dropdown
+        # --- Comments & Sentiment Filter ---
         st.subheader("💬 Comments Explorer")
         sentiment_filter = st.selectbox("Filter by Sentiment", ["All", "Positive", "Negative", "Neutral"])
 
-        if not comments_only.empty:
-            comments_only["Sentiment_Label"] = comments_only["Sentiment_Label"].astype(str).str.strip().str.title()
-            if sentiment_filter != "All":
-                comments_only = comments_only[comments_only["Sentiment_Label"] == sentiment_filter]
+        comments_only = multi_posts[multi_posts["Comments"].notna()].copy()
+        comments_only["Sentiment_Label"] = comments_only["Sentiment_Label"].astype(str).str.strip().str.title()
 
-            comment_table = comments_only[["Comments", "Sentiment_Label", "Sentiment_Score"]].reset_index(drop=True)
+        if sentiment_filter != "All":
+            comments_only = comments_only[comments_only["Sentiment_Label"] == sentiment_filter]
+
+        if not comments_only.empty:
+            comment_table = comments_only[["URL", "Comments", "Sentiment_Label", "Sentiment_Score"]].reset_index(drop=True)
             st.dataframe(comment_table, use_container_width=True)
 
-            # Sentiment Summary
+            # --- Sentiment Summary ---
             sentiment_counts_post = comments_only["Sentiment_Label"].value_counts(normalize=True) * 100
             st.markdown(
-                f"**Sentiment Summary:** 🙂 Positive: {sentiment_counts_post.get('Positive', 0):.1f}% | "
+                f"**Sentiment Summary:**  \n"
+                f"🙂 Positive: {sentiment_counts_post.get('Positive', 0):.1f}% | "
                 f"😡 Negative: {sentiment_counts_post.get('Negative', 0):.1f}% | "
                 f"😐 Neutral: {sentiment_counts_post.get('Neutral', 0):.1f}%"
             )
+        else:
+            st.info("No comments available for the selected filters.")
